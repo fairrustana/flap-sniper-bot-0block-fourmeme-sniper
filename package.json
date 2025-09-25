@@ -1,0 +1,33 @@
+{
+  "name": "pokemon-card-game",
+  "version": "1.0.0",
+  "description": "Blockchain Pokemon Card Game Smart Contracts for EVM and Solana",
+  "main": "index.js",
+  "scripts": {
+    "install-evm": "cd evm && npm install",
+    "install-solana": "cd solana && npm install",
+    "install-all": "npm run install-evm && npm run install-solana",
+    "test-evm": "cd evm && npx hardhat test",
+    "test-solana": "cd solana && anchor test",
+    "test-all": "npm run test-evm && npm run test-solana",
+    "build-evm": "cd evm && npx hardhat compile",
+    "build-solana": "cd solana && anchor build",
+    "build-all": "npm run build-evm && npm run build-solana"
+  },
+  "keywords": [
+    "pokemon",
+    "card-game",
+    "blockchain",
+    "smart-contracts",
+    "evm",
+    "solana",
+    "nft",
+    "gaming"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  }
+}
