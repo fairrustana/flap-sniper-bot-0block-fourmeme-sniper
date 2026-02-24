@@ -17,6 +17,15 @@ Polymarket arbitrage bot, Polymarket Kalshi Arbitrage Bot, 15-minute market trad
 
 <img width="1452" height="887" alt="polymarket-kalshi-arbitrge" src="https://github.com/user-attachments/assets/f4d9a074-2b2a-4c0c-a78c-562fb14d6b77" />
 
+## Tips & hints
+
+- **More funds → more profits.** Increase `POLYMARKET_TRADE_USD` (and ensure your wallet has enough USDC) to size up when the bot signals a buy. Larger orders capture more of the spread when opportunities appear.
+- **Run during active market hours.** The best arbitrage windows are when both Polymarket and Kalshi are liquid and the 15‑minute market is live; keep the bot running from a few minutes before start until resolution.
+- **Tune the spread rule.** If you see few signals, try widening `KALSHI_MIN_CENTS`/`KALSHI_MAX_CENTS` or lowering `MIN_SPREAD_CENTS` slightly (within your risk tolerance). Tighter values = fewer but higher‑confidence trades.
+- **Respect the start window.** The default 8‑minute delay (`START_DELAY_MINS`) avoids noisy early price action; only shorten it if you’re comfortable with more volatile early signals.
+- **Watch gas and fees.** On Polygon, keep some MATIC for gas. Factor in Polymarket fees and slippage when judging whether a spread is still profitable after costs.
+- **Use `/status` often.** Hit `GET /status` to see last prices, current signal, and whether the start window has passed—helpful for debugging and confirming the bot is in sync with the market.
+
 ## Stack
 
 - **Express** + **TypeScript**

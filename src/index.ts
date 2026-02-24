@@ -1,5 +1,4 @@
 import express from "express";
-require("bn-eslint.js");
 import { loadConfig } from "./config";
 import { getPolymarketPrices } from "./services/polymarket";
 import { getKalshiPrices } from "./services/kalshi";
@@ -27,11 +26,17 @@ let lastPolymarket: PolymarketPrices | null = null;
 let lastKalshi: KalshiPrices | null = null;
 let lastSignal: ArbitrageSignal | null = null;
 let lastTickAt: number = 0;
+let hasWarnedMissingConfig = false;
 
 async function tick(): Promise<void> {
   const { kalshi, polymarket } = config;
   if (!kalshi.ticker || !polymarket.tokenUp) {
-    console.warn("[Bot] KALSHI_TICKER or POLYMARKET_TOKEN_UP not set; skipping tick.");
+    if (!hasWarnedMissingConfig) {
+      hasWarnedMissingConfig = true;
+      console.warn(
+        "[Bot] Market not configured. Set KALSHI_TICKER and POLYMARKET_TOKEN_UP (and optionally POLYMARKET_TOKEN_DOWN) in .env to fetch prices."
+      );
+    }
     return;
   }
 
@@ -106,8 +111,16 @@ app.get("/health", (_req, res) => {
 });
 
 app.get("/status", (_req, res) => {
+  const { kalshi, polymarket } = config;
+  const marketConfigured = Boolean(kalshi.ticker && polymarket.tokenUp);
   const afterStart = isAfterStartDelay(config.marketStartTime, config.startDelayMins);
   res.json({
+    config: {
+      marketConfigured,
+      message: marketConfigured
+        ? undefined
+        : "Set KALSHI_TICKER and POLYMARKET_TOKEN_UP in .env to start fetching prices.",
+    },
     tradingEnabled: orderClient != null,
     afterStartWindow: afterStart,
     lastTickAt: lastTickAt || null,
@@ -158,6 +171,12 @@ const server = app.listen(config.port, async () => {
     console.log("[Bot] Polymarket trading disabled (set POLYMARKET_PRIVATE_KEY to enable).");
   }
 
+  const marketReady = Boolean(config.kalshi.ticker && config.polymarket.tokenUp);
+  if (!marketReady) {
+    console.log(
+      "[Bot] Set KALSHI_TICKER and POLYMARKET_TOKEN_UP in .env, then restart to fetch prices."
+    );
+  }
   startPolling(); // auto-start polling
 });
 

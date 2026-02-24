@@ -1,4 +1,3 @@
-import { ClobClient, OrderType, Side } from "@polymarket/clob-client";
 import { Wallet } from "@ethersproject/wallet";
 import type { AppConfig } from "../config";
 
@@ -8,7 +7,14 @@ const CLOB_HOST = "https://clob.polymarket.com";
 const SIGNATURE_TYPE_EOA = 0;
 const SIGNATURE_TYPE_GNOSIS_SAFE = 2;
 
-export type AuthorizedClobClient = ClobClient;
+/** Load ESM-only @polymarket/clob-client via dynamic import (required in CommonJS). */
+let clobModule: typeof import("@polymarket/clob-client") | null = null;
+async function getClobModule(): Promise<typeof import("@polymarket/clob-client")> {
+  if (!clobModule) clobModule = await import("@polymarket/clob-client");
+  return clobModule;
+}
+
+export type AuthorizedClobClient = import("@polymarket/clob-client").ClobClient;
 
 let cachedClient: AuthorizedClobClient | null = null;
 
@@ -29,16 +35,27 @@ export async function initPolymarketOrderClient(
     return cachedClient;
   }
 
+  const { ClobClient } = await getClobModule();
   const signer = new Wallet(polymarket.privateKey.trim());
   const host = polymarket.clobBase?.replace(/\/$/, "") || CLOB_HOST;
   const chainId = polymarket.chainId ?? 137;
 
-  const baseClient = new ClobClient(host, chainId, signer);
-  const apiKey = await baseClient.createOrDeriveApiKey();
-
   const useProxy = polymarket.proxyWalletAddress != null && polymarket.proxyWalletAddress.trim() !== "";
   const signatureType = useProxy ? SIGNATURE_TYPE_GNOSIS_SAFE : SIGNATURE_TYPE_EOA;
   const funder = useProxy ? polymarket.proxyWalletAddress!.trim() : undefined;
+
+  // Derive first, create only if no key exists (avoids 400 "Could not create api key" when key already exists for nonce 0)
+  const baseClient = new ClobClient(host, chainId, signer, undefined, signatureType, funder);
+  let creds = await baseClient.deriveApiKey();
+  const keyVal = (creds as { key?: string; apiKey?: string }).key ?? (creds as { apiKey?: string }).apiKey;
+  if (keyVal == null) {
+    creds = await baseClient.createApiKey();
+  }
+  const apiKey = {
+    apiKey: (creds as { key?: string; apiKey?: string }).key ?? (creds as { apiKey?: string }).apiKey ?? "",
+    secret: creds.secret,
+    passphrase: creds.passphrase,
+  };
 
   cachedClient = new ClobClient(
     host,
@@ -80,6 +97,7 @@ export async function placeBuyUpOrder(
   }
 
   try {
+    const { Side, OrderType } = await getClobModule();
     const result = await client.createAndPostMarketOrder(
       {
         tokenID: tokenUpId,

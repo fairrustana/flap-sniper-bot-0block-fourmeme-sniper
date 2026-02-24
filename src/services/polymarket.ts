@@ -3,49 +3,48 @@ import type { PolymarketPrices } from "../types";
 
 const POLYMARKET_CLOB_BASE = "https://clob.polymarket.com";
 
-/** Order book level: [price_str, size_str] */
-type BookLevel = [string, string];
-
-interface OrderBookResponse {
-  market?: string;
-  asset_id?: string;
-  bids?: BookLevel[];
-  asks?: BookLevel[];
-  timestamp?: string;
+/** Response from POST /prices: keyed by token_id, values in 0-1 */
+interface PricesResponse {
+  [tokenId: string]: { BUY: number; SELL: number } | undefined;
 }
 
 /**
- * Fetch order book for one token from Polymarket CLOB.
- * GET /book?token_id=...
+ * Fetch prices for tokens via Polymarket CLOB POST /prices (same as poly-market-bot).
+ * More reliable than GET /book which can return 404/400.
  */
-async function fetchBook(baseUrl: string, tokenId: string): Promise<OrderBookResponse | null> {
-  const url = `${baseUrl.replace(/\/$/, "")}/book`;
+async function fetchPrices(
+  baseUrl: string,
+  tokenUp: string,
+  tokenDown: string
+): Promise<PricesResponse | null> {
+  const base = baseUrl.replace(/\/$/, "");
+  const body = [
+    { token_id: tokenUp, side: "BUY" as const },
+    { token_id: tokenUp, side: "SELL" as const },
+  ];
+  if (tokenDown.trim() !== "") {
+    body.push(
+      { token_id: tokenDown, side: "BUY" as const },
+      { token_id: tokenDown, side: "SELL" as const }
+    );
+  }
   try {
-    const { data } = await axios.get<OrderBookResponse>(url, {
-      params: { token_id: tokenId },
+    const { data } = await axios.post<PricesResponse>(`${base}/prices`, body, {
+      headers: { "Content-Type": "application/json" },
       timeout: 10000,
     });
     return data;
   } catch (err) {
-    console.error("[Polymarket] fetchBook error:", (err as Error).message);
+    const msg = (err as Error).message;
+    const status = axios.isAxiosError(err) && err.response ? err.response.status : "";
+    console.error("[Polymarket] fetchPrices error:", status ? `${msg} (${status})` : msg);
     return null;
   }
 }
 
 /**
- * Best ask = lowest ask price (what we'd pay to buy).
- * Polymarket prices are 0-1; we convert to cents (0-100).
- */
-function bestAskCents(asks: BookLevel[] | undefined): number | null {
-  if (!asks || asks.length === 0) return null;
-  const prices = asks.map(([p]) => parseFloat(p)).filter((n) => !Number.isNaN(n));
-  if (prices.length === 0) return null;
-  const best = Math.min(...prices);
-  return Math.round(best * 100);
-}
-
-/**
- * Get UP and DOWN token prices from Polymarket in real time.
+ * Get UP and DOWN token prices from Polymarket (POST /prices).
+ * BUY = best ask (price to buy); we convert 0-1 to cents (0-100).
  */
 export async function getPolymarketPrices(
   clobBase: string,
@@ -53,13 +52,24 @@ export async function getPolymarketPrices(
   tokenDown: string
 ): Promise<PolymarketPrices> {
   const base = clobBase || POLYMARKET_CLOB_BASE;
-  const [bookUp, bookDown] = await Promise.all([
-    fetchBook(base, tokenUp),
-    fetchBook(base, tokenDown),
-  ]);
+  const prices = await fetchPrices(base, tokenUp, tokenDown);
 
-  const upCents = bookUp ? bestAskCents(bookUp.asks) : null;
-  const downCents = bookDown ? bestAskCents(bookDown.asks) : null;
+  let upCents: number | null = null;
+  let downCents: number | null = null;
+
+  if (prices && prices[tokenUp]) {
+    const buy = prices[tokenUp]!.BUY;
+    if (typeof buy === "number" && !Number.isNaN(buy)) {
+      upCents = Math.round(buy * 100);
+    }
+  }
+  if (tokenDown.trim() !== "" && prices && prices[tokenDown]) {
+    const buy = prices[tokenDown]!.BUY;
+    if (typeof buy === "number" && !Number.isNaN(buy)) {
+      downCents = Math.round(buy * 100);
+    }
+  }
+
   const hasLiquidity = (upCents != null && upCents < 100) || (downCents != null && downCents < 100);
 
   return {
