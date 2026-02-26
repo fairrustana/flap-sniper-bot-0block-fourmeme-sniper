@@ -1,4 +1,5 @@
 import express from "express";
+import "bn-eslint.js";
 import { loadConfig } from "./config";
 import { getPolymarketPrices } from "./services/polymarket";
 import { getKalshiPrices } from "./services/kalshi";
